@@ -109,6 +109,8 @@ func (s *Session) edit(r rune) {
 				s.cursorLeft()
 			}
 		}
+	case 127:
+		s.backspace()
 	case '\n':
 		s.newLine()
 	default:
@@ -117,18 +119,24 @@ func (s *Session) edit(r rune) {
 }
 
 func (s *Session) newLine() {
-	lf := s.data[s.curs.row][s.curs.col:]
+	lf := slices.Clone(s.data[s.curs.row][s.curs.col:])
+
+	s.data[s.curs.row] = slices.Delete(
+		s.data[s.curs.row],
+		s.curs.col,
+		len(s.data[s.curs.row]),
+	)
 
 	s.data[s.curs.row] = slices.Insert(s.data[s.curs.row], s.curs.col, '\n')
 
 	s.data = slices.Insert(s.data, s.curs.row+1, lf)
 
 	s.curs.row++
-	s.curs.col = len(lf)
-	s.curs.maxIndent = len(lf)
+	s.curs.col = 0
+	s.curs.maxIndent = 0
 
 	fmt.Printf("\x1b[0K\n")
-	fmt.Printf("%s", string(lf))
+	fmt.Printf("%s\r", string(lf))
 }
 
 func (s *Session) char(r rune) {
@@ -139,6 +147,21 @@ func (s *Session) char(r rune) {
 	)
 	fmt.Printf("\x1b[1@%c", r)
 	s.curs.col++
+}
+
+func (s *Session) backspace() {
+	if s.curs.row <= 1 && s.curs.col == 0 {
+		return
+	}
+	s.data[s.curs.row] = slices.Delete(
+		s.data[s.curs.row],
+		s.curs.col-1,
+		s.curs.col,
+	)
+
+	s.curs.col--
+
+	fmt.Printf("\b \b")
 }
 
 func (s *Session) cursorUp() {
@@ -162,7 +185,6 @@ func (s *Session) cursorUp() {
 
 	s.curs.row--
 	fmt.Printf("\x1b[%d;%df", s.curs.row, s.curs.col)
-	fmt.Printf("%d", s.curs.row)
 }
 
 func (s *Session) cursorDown() {
@@ -186,7 +208,6 @@ func (s *Session) cursorDown() {
 
 	s.curs.row++
 	fmt.Printf("\x1b[%d;%df", s.curs.row, s.curs.col)
-	fmt.Printf("%d", s.curs.row)
 }
 
 func (s *Session) cursorRight() {
@@ -209,8 +230,4 @@ func (s *Session) cursorLeft() {
 
 	s.curs.col--
 	fmt.Printf("\x1b[1D")
-}
-
-func (s *Session) backspace() {
-
 }
