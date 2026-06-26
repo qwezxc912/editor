@@ -32,7 +32,7 @@ func New(file *os.File) *Session {
 
 	cursor := &curs{col: 0, row: 1, maxIndent: 0}
 
-	d := make([][]rune, 1, 1)
+	d := make([][]rune, 2, 2)
 
 	return &Session{
 		curs:   cursor,
@@ -65,8 +65,6 @@ func (s *Session) UploadFile() {
 	for scanner.Scan() {
 		s.data = append(s.data, []rune(scanner.Text()+"\n"))
 	}
-
-	s.curs.row = len(s.data) - 1
 }
 
 func (s *Session) WriteFile() error {
@@ -86,8 +84,6 @@ func (s *Session) PrintData() {
 
 func (s *Session) edit(r rune) {
 	switch r {
-	case 0:
-		break
 	case '\x1b':
 		r, _, err := s.reader.ReadRune()
 		if err != nil {
@@ -135,8 +131,25 @@ func (s *Session) newLine() {
 	s.curs.col = 0
 	s.curs.maxIndent = 0
 
-	fmt.Printf("\x1b[0K\n")
-	fmt.Printf("%s\r", string(lf))
+	if s.curs.row != len(s.data)-1 {
+		fmt.Printf("\x1b[s")
+		for i := len(s.data) - 1; i >= s.curs.row; i-- {
+			fmt.Printf("\x1b[%d;%dH", i, 0)
+			fmt.Printf("\x1b[0K")
+			fmt.Printf("%s", string(s.data[i]))
+		}
+		fmt.Printf("\x1b[u")
+	}
+
+	if len(lf) != 0 {
+		fmt.Printf("\x1b[0K\n")
+		if lf[len(lf)-1] == '\n' {
+			lf = lf[:len(lf)-1]
+		}
+		fmt.Printf("%s\r", string(lf))
+	} else {
+		fmt.Printf("\n")
+	}
 }
 
 func (s *Session) char(r rune) {
@@ -150,9 +163,14 @@ func (s *Session) char(r rune) {
 }
 
 func (s *Session) backspace() {
-	if s.curs.row <= 1 && s.curs.col == 0 {
+	if s.curs.row <= 1 && s.curs.col < 1 {
 		return
 	}
+
+	if s.curs.col < 1 {
+		return
+	}
+
 	s.data[s.curs.row] = slices.Delete(
 		s.data[s.curs.row],
 		s.curs.col-1,
@@ -182,13 +200,12 @@ func (s *Session) cursorUp() {
 	} else {
 		s.curs.col = len(s.data[s.curs.row-1])
 	}
-
 	s.curs.row--
 	fmt.Printf("\x1b[%d;%df", s.curs.row, s.curs.col)
 }
 
 func (s *Session) cursorDown() {
-	if s.curs.row >= len(s.data)-1 {
+	if s.curs.row == len(s.data)-1 {
 		return
 	}
 
@@ -211,7 +228,7 @@ func (s *Session) cursorDown() {
 }
 
 func (s *Session) cursorRight() {
-	if s.curs.col > len(s.data[s.curs.row])-1 {
+	if s.curs.col >= len(s.data[s.curs.row]) {
 		return
 	}
 
